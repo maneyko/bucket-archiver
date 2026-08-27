@@ -1,11 +1,15 @@
-terraform {
-  required_version = ">= 1.15"
+locals {
+  # Hardcoded settings
+  lambda_function = {
+    runtime = "python3.14"
+    handler = "main.lambda_handler"
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 6.50"
-    }
+    architectures = ["arm64"]
+
+    # Peak memory is roughly part_size plus one source object; the larger
+    # allocation is for the proportionally larger network throughput.
+    memory_size  = 1024 # MiB
+    storage_size = 512 # MiB
   }
 }
 
@@ -98,19 +102,17 @@ resource "aws_lambda_function" "this" {
   s3_key            = data.aws_s3_object.package.key
   s3_object_version = data.aws_s3_object.package.version_id
 
-  runtime       = "python3.14"
-  handler       = "main.lambda_handler"
-  architectures = ["arm64"]
+  runtime       = local.lambda_function.runtime
+  handler       = local.lambda_function.handler
+  architectures = local.lambda_function.architectures
 
-  # Peak memory is roughly part_size plus one source object; the larger
-  # allocation is for the proportionally larger network throughput.
-  memory_size = 1024
+  memory_size = local.lambda_function.memory_size
   timeout     = 900 # Maximum (15 minutes)
 
   reserved_concurrent_executions = var.max_concurrency
 
   ephemeral_storage {
-    size = 512 # MiB
+    size = local.lambda_function.storage_size
   }
 }
 
