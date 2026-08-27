@@ -128,16 +128,6 @@ resource "aws_cloudwatch_event_rule" "this" {
   state               = "ENABLED"
 }
 
-moved {
-  from = aws_cloudwatch_event_target.daily
-  to   = aws_cloudwatch_event_target.this
-}
-
-moved {
-  from = aws_cloudwatch_event_rule.daily
-  to   = aws_cloudwatch_event_rule.this
-}
-
 resource "aws_cloudwatch_event_target" "this" {
   for_each = aws_cloudwatch_event_rule.this
 
