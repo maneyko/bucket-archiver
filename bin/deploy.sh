@@ -6,7 +6,7 @@ __DIR__=$PWD
 
 export AWS_PROFILE="personal"
 
-lambda_name="imap-sync-s3-archiver"
+lambda_name="bucket-archiver"
 
 BUCKET="my-lambdas"
 KEY="$lambda_name/function.zip"
@@ -55,7 +55,7 @@ aws lambda update-function-code \
   --s3-bucket $BUCKET \
   --s3-key $KEY
 
-echo "Lambda synced"
+echo "Lambda '$lambda_name' synced"
 
 runtime_name=$(aws lambda get-function-configuration --function-name $lambda_name | jq -r .Runtime)
 

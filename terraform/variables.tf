@@ -27,8 +27,8 @@ variable "artifact_version" {
 }
 
 variable "schedules" {
-  description = "Bucket name -> EventBridge cron. Stagger them; runs must not overlap."
-  type        = map(string)
+  description = "Bucket name -> EventBridge crons. An empty list disables archiving for that bucket."
+  type        = map(list(string))
 }
 
 variable "max_concurrency" {

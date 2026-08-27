@@ -1,5 +1,5 @@
+# Hardcoded settings
 locals {
-  # Hardcoded settings
   lambda_function = {
     runtime = "python3.14"
     handler = "main.lambda_handler"
@@ -9,7 +9,7 @@ locals {
     # Peak memory is roughly part_size plus one source object; the larger
     # allocation is for the proportionally larger network throughput.
     memory_size  = 1024 # MiB
-    storage_size = 512 # MiB
+    storage_size = 512  # MiB
   }
 }
 
@@ -116,27 +116,35 @@ resource "aws_lambda_function" "this" {
   }
 }
 
-# One rule per bucket, each naming its bucket in the payload. Stagger the crons:
-# a run may take the full 15 minutes and two invocations must never overlap on
-# the same bucket.
+locals {
+  # One rule per (bucket, schedule) pair. A bucket with an empty list gets no
+  # rules at all, which is how archiving is turned off for it.
+  schedules = merge([
+    for bucket, crons in var.schedules : {
+      for i, cron in crons : "${bucket}-${i + 1}" => { bucket = bucket, cron = cron }
+    }
+  ]...)
+}
+
+# Stagger the crons: a run may take the full 15 minutes and two invocations must
+# never overlap on the same bucket.
 resource "aws_cloudwatch_event_rule" "this" {
-  for_each = var.schedules
+  for_each = local.schedules
 
   name                = "${var.function_name}-${each.key}"
-  description         = "Roll-up small objects in ${each.key} into tars under bucket-archive/"
-  schedule_expression = each.value
-  state               = "ENABLED"
+  description         = "Roll-up small objects in ${each.value.bucket} into tars under bucket-archive/"
+  schedule_expression = each.value.cron
 }
 
 resource "aws_cloudwatch_event_target" "this" {
-  for_each = aws_cloudwatch_event_rule.this
+  for_each = local.schedules
 
-  rule      = each.value.name
+  rule      = aws_cloudwatch_event_rule.this[each.key].name
   target_id = var.function_name
   arn       = aws_lambda_function.this.arn
 
   # The bucket to work on. Everything else comes from that bucket's own config.
-  input = jsonencode({ bucket = each.key })
+  input = jsonencode({ bucket = each.value.bucket })
 
   # "The bucket is the state": two runs would list the same objects and race to
   # bundle and delete them. A retry can overlap an invocation that is merely

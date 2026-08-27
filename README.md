@@ -110,11 +110,11 @@ aws s3 cp s3://BUCKET/bucket-archive/…/archive-000001.manifest.jsonl.zst - \
 
 ## Running it
 
-The Lambda is scheduled nightly, one EventBridge rule per bucket. To run it by
-hand:
+The Lambda is scheduled by EventBridge, one rule per (bucket, cron) pair. To run
+it by hand:
 
 ```bash
-aws lambda invoke --function-name imap-sync-s3-archiver \
+aws lambda invoke --function-name bucket-archiver \
   --cli-read-timeout 0 --payload '{"bucket":"my-bucket"}' /tmp/out.json
 ```
 
@@ -144,31 +144,34 @@ sidecar, and the manifest. No config, no database, no external index.
 ## Terraform module
 
 [`terraform/`](terraform/) is a module: the function, its role and policy, its
-log group, and one EventBridge rule per bucket. It references a package this
-repo's `bin/deploy.sh` has already uploaded, so an apply does not need the
-source checked out.
+log group, and one EventBridge rule per (bucket, cron) pair. It references a
+package this repo's `bin/deploy.sh` has already uploaded, so an apply does not
+need the source checked out.
 
 ```hcl
 module "bucket_archiver" {
-  source = "git::ssh://git@github.com/maneyko/bucket-archiver.git//terraform?ref=v1.0.0"
+  source = "git::ssh://git@github.com/maneyko/bucket-archiver.git//terraform"
 
-  function_name       = "imap-sync-s3-archiver"
   archive_bucket_arns = [for bucket in aws_s3_bucket.archive : bucket.arn]
-
-  artifact_bucket = aws_s3_bucket.lambda_artifacts.id
-  artifact_key    = "imap-sync-s3-archiver/function.zip"
+  artifact_bucket     = aws_s3_bucket.lambda_artifacts.id
 
   schedules = {
-    my-mail-archive  = "cron(0 8 * * ? *)"
-    my-photo-archive = "cron(0 9 * * ? *)"
+    my-mail-archive  = ["cron(0 8 * * ? *)"]
+    my-photo-archive = ["cron(0 9 * * ? *)", "cron(0 21 * * ? *)"]
   }
 }
 ```
 
-`function_name` must match `lambda_name` in `bin/deploy.sh`; nothing enforces
-that, and a mismatch means the deploy updates a function Terraform does not
-manage. The runtime and handler are properties of the code, so the module pins
-them rather than exposing them.
+A bucket may list several crons; stagger them, because a run can take the full
+15 minutes and two invocations must never overlap on the same bucket. An empty
+list is how archiving is turned off for a bucket — comment the crons out and
+apply. There is no disabled-but-present rule, so what exists in EventBridge is
+exactly what runs.
 
-Bump the `ref` when the module changes. A consumer pinned to a tag will not pick
-up `main`.
+`function_name` defaults to `bucket-archiver` and must match `lambda_name` in
+`bin/deploy.sh`; nothing enforces that, and a mismatch means the deploy updates
+a function Terraform does not manage. The runtime and handler are properties of
+the code, so the module pins them rather than exposing them.
+
+The source above tracks `main`; add `?ref=<tag>` to pin, and `terraform init
+-upgrade` to pick up a change either way.

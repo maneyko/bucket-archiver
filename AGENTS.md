@@ -88,8 +88,12 @@ version id), so an apply from a consumer repo will roll the function back to
 whatever version that repo records. The CLI deploy is the fast path; Terraform
 is the record.
 
-Consumers pin the module by git tag. A module change is not picked up until the
-tag is bumped *and* the consumer's `ref` is updated.
+Consumers track `main` unless they add `?ref=<tag>`; either way a module change
+is only picked up on `terraform init -upgrade`.
+
+Archiving is disabled per bucket by giving it an empty schedule list, which
+deletes its EventBridge rules. There is deliberately no disabled-but-present
+rule: what exists is what runs.
 
 ## Repo map
 

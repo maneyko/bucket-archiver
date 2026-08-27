@@ -11,6 +11,11 @@ output "role_arn" {
 }
 
 output "schedules" {
-  description = "EventBridge schedule expression per bucket"
-  value       = { for bucket, rule in aws_cloudwatch_event_rule.this : bucket => rule.schedule_expression }
+  description = "EventBridge schedule expressions per bucket"
+  value = {
+    for bucket, crons in var.schedules : bucket => [
+      for key, schedule in local.schedules : aws_cloudwatch_event_rule.this[key].schedule_expression
+      if schedule.bucket == bucket
+    ]
+  }
 }
