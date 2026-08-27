@@ -1,0 +1,19 @@
+# These two must be defined by the user in the bucket config:
+prefix_pattern = []
+suffix_pattern = ''
+
+# Metadata for "<key>" lives at "<key><sidecar_suffix>"; it is bundled into the
+# tar next to the object it describes and copied into the manifest.
+sidecar_suffix = ".json"
+
+archive_storage_class  = "DEEP_ARCHIVE"
+manifest_storage_class = "STANDARD"
+
+# Set false to leave the sources in place after archiving
+# (testing only; the next run will bundle them again)
+delete_sources = true
+
+min_archive_mib = 250
+min_age_seconds = 3600
+part_size_mib   = 16
+time_reserve_ms = 300_000
