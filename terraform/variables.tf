@@ -31,12 +31,6 @@ variable "schedules" {
   type        = map(string)
 }
 
-variable "schedule_state" {
-  description = "ENABLED or DISABLED, for every schedule at once"
-  type        = string
-  default     = "ENABLED"
-}
-
 variable "max_concurrency" {
   description = "reserved_concurrent_executions; -1 leaves it unreserved"
   type        = number

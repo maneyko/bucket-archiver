@@ -125,7 +125,7 @@ resource "aws_cloudwatch_event_rule" "this" {
   name                = "${var.function_name}-${each.key}"
   description         = "Roll-up small objects in ${each.key} into tars under bucket-archive/"
   schedule_expression = each.value
-  state               = var.schedule_state
+  state               = "ENABLED"
 }
 
 moved {
