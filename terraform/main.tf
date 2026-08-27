@@ -42,7 +42,7 @@ resource "aws_iam_role" "this" {
 # itself. Everything outside "bucket-archive/" is a source it may bundle and
 # delete, so the code's prefix_pattern is what keeps deletes in bounds.
 resource "aws_iam_role_policy" "this" {
-  name = "s3-archiver-access"
+  name = "${var.function_name}-access"
   role = aws_iam_role.this.id
 
   policy = jsonencode({
@@ -119,17 +119,27 @@ resource "aws_lambda_function" "this" {
 # One rule per bucket, each naming its bucket in the payload. Stagger the crons:
 # a run may take the full 15 minutes and two invocations must never overlap on
 # the same bucket.
-resource "aws_cloudwatch_event_rule" "daily" {
+resource "aws_cloudwatch_event_rule" "this" {
   for_each = var.schedules
 
   name                = "${var.function_name}-${each.key}"
-  description         = "Daily roll-up of small objects in ${each.key} into tars under bucket-archive/"
+  description         = "Roll-up small objects in ${each.key} into tars under bucket-archive/"
   schedule_expression = each.value
   state               = var.schedule_state
 }
 
-resource "aws_cloudwatch_event_target" "daily" {
-  for_each = aws_cloudwatch_event_rule.daily
+moved {
+  from = aws_cloudwatch_event_target.daily
+  to   = aws_cloudwatch_event_target.this
+}
+
+moved {
+  from = aws_cloudwatch_event_rule.daily
+  to   = aws_cloudwatch_event_rule.this
+}
+
+resource "aws_cloudwatch_event_target" "this" {
+  for_each = aws_cloudwatch_event_rule.this
 
   rule      = each.value.name
   target_id = var.function_name
@@ -148,7 +158,7 @@ resource "aws_cloudwatch_event_target" "daily" {
 }
 
 resource "aws_lambda_permission" "events" {
-  for_each = aws_cloudwatch_event_rule.daily
+  for_each = aws_cloudwatch_event_rule.this
 
   statement_id  = "AllowExecutionFromEventBridge-${each.key}"
   action        = "lambda:InvokeFunction"
