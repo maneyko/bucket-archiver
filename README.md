@@ -130,6 +130,22 @@ takes several invocations. Loop until it reports `"archives": []`.
 ./bin/deploy.sh --build  # build only
 ```
 
+`bin/deploy.sh` carries my values at the top and nothing reads them from the
+environment — set these three before using it anywhere else:
+
+| Variable | Currently | Is |
+|---|---|---|
+| `AWS_PROFILE` | `personal` | the profile the upload and update run as |
+| `BUCKET` | `my-lambdas` | the artifact bucket, matching the module's `artifact_bucket` |
+| `lambda_name` | `bucket-archiver` | must match the module's `function_name` |
+
+The last one is worth repeating because nothing enforces it: a mismatch means
+the deploy quietly updates a function Terraform does not manage.
+
+The script also checks the function's Python runtime against
+`endoflife.date` and warns when a newer stable release exists. It only warns —
+the runtime is pinned in the Terraform, so upgrading is a deliberate edit there.
+
 ## Restoring
 
 ```bash
@@ -150,7 +166,7 @@ need the source checked out.
 
 ```hcl
 module "bucket_archiver" {
-  source = "git::ssh://git@github.com/maneyko/bucket-archiver.git//terraform"
+  source = "git::https://github.com/maneyko/bucket-archiver.git//terraform"
 
   archive_bucket_arns = [for bucket in aws_s3_bucket.archive : bucket.arn]
   artifact_bucket     = aws_s3_bucket.lambda_artifacts.id
