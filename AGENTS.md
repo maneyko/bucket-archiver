@@ -47,10 +47,8 @@ bucket.
    one. Three settings, one constraint; changing any of them alone breaks it.
 6. **Peak memory must not depend on the largest object.** Objects above
    `PREFETCH_MIB` are streamed rather than prefetched for this reason. Anything
-   that buffers a whole object puts a size ceiling on the bucket. What it does
-   depend on is `max_archive_objects`: every member's parsed sidecar is held in
-   `members` until the tar closes, so the manifest, not the buffers, is what
-   sets the floor under `memory_size`.
+   that buffers a whole object puts a size ceiling on the bucket, which is what
+   the 906 MB mail peaks were before the streaming path existed.
 
 ## Sharp edges, all of which have already caused a bug
 
@@ -59,6 +57,14 @@ the moment the layout changed. The Lambda's write scope matches
 `bucket-archive/*/archive-*`, which cannot accidentally match a `state.json` or
 the config. Failures here are silent: deletes come back in `delete_errors`, not
 as an exception.
+
+**A role that cannot delete turns the run loop into an infinite one.** Because
+the bucket is the state, a failed delete leaves exactly the objects the next
+`archive_once` will select again. `archive_once` still reports success, so
+`run()` keeps going: a test role missing `s3:DeleteObject` wrote 159 identical
+tars from the same 300 objects and burned a full invocation before stopping on
+`time_reserve_ms`. The tell in the log is `deleted 0 objects and sidecars` on a
+line that otherwise reads like a success.
 
 **`zip -r` appends to an existing archive.** `bin/deploy.sh` removes the zip
 first, or you ship files you deleted months ago.
@@ -98,14 +104,19 @@ not 2x. Getting this wrong moves the predicted memory ceiling by a factor of
 two — the measured boundary was a 1,356 MiB member archiving fine while an
 1,856 MiB one died at 2047 MB of 2048.
 
-**Measure memory on a bucket with sidecars, not one without.** The photo bucket
-peaks around 320 MB because it has no sidecars and few members per tar; the mail
-bucket peaked at 980 MB doing the same work, because `members` holds a parsed
-sidecar per object and it is not freed until the tar closes. Peak also climbs
-with archives per invocation rather than resetting between them — 47 small
-archives cost more than one large one — so the allocator is not returning those
-buffers. Generalising from the photo numbers is how `memory_size` nearly got cut
-to 1024, where the mail figure is 96%.
+**Memory figures are only comparable within one build.** The mail backfill
+peaked at 906–980 MB, which looked like a reason to keep `memory_size` at 2048.
+Those runs predate the streaming path and were buffering whole objects, and the
+mail bucket has objects up to 89 MiB. On the current build the same shapes
+measure 184 MB for a 3,000-object archive and 339 MB for 160 archives in one
+invocation. Before citing a peak, check it came from the code now deployed.
+
+**Memory buys vCPU, and the prefetch is CPU-bound.** The worker threads contend
+on botocore's response parsing, not the network, so halving `memory_size` halves
+throughput: 3,000 objects took 18 s at 2048 MiB and 35 s at 1024. That is the
+real cost of the setting; the heap is nowhere near either figure. It also feeds
+back into the `max_archive_objects` sizing, since the cap converts to seconds at
+whatever rate the current memory allows.
 
 **Deep Archive objects cannot be copied or renamed.** `CopyObject` fails with
 `InvalidObjectState` until restored (12–48 h). Get the naming right before

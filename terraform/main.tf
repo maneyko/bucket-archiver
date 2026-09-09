@@ -6,13 +6,12 @@ locals {
 
     architectures = ["arm64"]
 
-    # Not reducible to 1024: the manifest dominates, not the buffers. Every
-    # member's parsed sidecar is held until the tar closes, so peak scales with
-    # max_archive_objects and again with archives per invocation. A mail run
-    # measured 980 MB, which is 96% of 1024, and that was at a 9,000 cap.
-    # The rest also buys vCPU, which the fetch_workers threads need because
-    # botocore parsing is what they contend on.
-    memory_size  = 2048 # MiB
+    # 1024 is memory-comfortable: measured peaks are 184 MB for a 3,000-object
+    # archive and 339 MB for 160 archives in one invocation. What it costs is
+    # vCPU, which scales with this setting and which the fetch_workers threads
+    # need because they contend on botocore parsing rather than the network --
+    # 3,000 objects took 18 s at 2048 and 35 s at 1024.
+    memory_size  = 1024 # MiB
     storage_size = 512  # MiB
   }
 }
