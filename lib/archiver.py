@@ -50,11 +50,13 @@ class Archiver:
         """Build one tar for this prefix, or return None if there is not enough data."""
         objects = self.select_objects(source_prefix)
         pending_bytes = sum(obj["Size"] for obj in objects)
+        limit_bytes = self.settings.min_archive_mib*1024**2
 
-        if pending_bytes < self.settings.min_archive_mib*1024**2:
+        if pending_bytes < limit_bytes and len(objects) < self.settings.max_archive_objects:
             print(
                 f"{source_prefix}: {len(objects):,} objects / {human_bytes(pending_bytes)} pending "
-                f"(< {self.settings.min_archive_mib} MiB), waiting"
+                f"(under {self.settings.min_archive_mib} MiB and "
+                f"{self.settings.max_archive_objects:,} objects), waiting"
             )
             return None
 
@@ -91,6 +93,7 @@ class Archiver:
     def select_objects(self, source_prefix: str) -> list[dict]:
         """The oldest objects worth up to one archive, skipping any still being written."""
         cutoff = time.time() - self.settings.min_age_seconds
+        limit_bytes = self.settings.min_archive_mib*1024**2
         objects = []
         pending_bytes = 0
 
@@ -101,7 +104,7 @@ class Archiver:
                 break
             objects.append(obj)
             pending_bytes += obj["Size"]
-            if pending_bytes >= self.settings.min_archive_mib*1024**2:
+            if pending_bytes >= limit_bytes or len(objects) >= self.settings.max_archive_objects:
                 break
 
         return objects

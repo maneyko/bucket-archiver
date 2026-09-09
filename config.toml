@@ -13,7 +13,12 @@ manifest_storage_class = "STANDARD"
 # (testing only; the next run will bundle them again)
 delete_sources = true
 
-min_archive_mib = 250
-min_age_seconds = 3600
-part_size_mib   = 16
-time_reserve_ms = 300_000
+# An archive is cut once either limit is reached. A run spends its time on
+# per-object round trips rather than on bytes, so only the count bounds how long
+# one archive takes, and time_reserve_ms has to cover that.
+min_archive_mib     = 250
+max_archive_objects = 3000
+
+min_age_seconds     = 3600
+part_size_mib       = 16
+time_reserve_ms     = 300_000

@@ -25,8 +25,8 @@ overhead. Packed into ~250 MiB tars, the overhead disappears.
    matching each path segment. `['@', '.*']` finds `me@example.com/INBOX/`.
    `bucket-archive/` is always skipped, so it can never archive its own output.
 2. **Select.** List a source prefix in key order, take objects matching
-   `suffix_pattern` until `min_archive_mib` is reached, skipping anything newer
-   than `min_age_seconds`.
+   `suffix_pattern` until either `min_archive_mib` or `max_archive_objects` is
+   reached, skipping anything newer than `min_age_seconds`.
 3. **Bundle.** Stream each object and its `<key><sidecar_suffix>` sidecar into a
    tar via multipart upload, so memory stays at roughly one part regardless of
    size. The manifest goes in as the final member.
@@ -53,11 +53,19 @@ sidecar_suffix = ".json"          # metadata for "<key>" lives at "<key>.json"
 archive_storage_class  = "DEEP_ARCHIVE"
 manifest_storage_class = "STANDARD"
 
-min_archive_mib = 250
-min_age_seconds = 3600            # never race the process still writing
-part_size_mib   = 16
-time_reserve_ms = 300_000         # stop starting archives near the Lambda timeout
+min_archive_mib     = 250
+max_archive_objects = 3000        # whichever limit a prefix reaches first
+min_age_seconds     = 3600        # never race the process still writing
+part_size_mib       = 16
+time_reserve_ms     = 300_000     # stop starting archives near the Lambda timeout
 ```
+
+A run's time goes on per-object round trips, not on bytes: 3,900 objects took
+291 s at 250 MiB and 3,713 took 328 s at 102 MiB. So `min_archive_mib` alone
+does not bound how long one archive takes — mean object size decides that, and
+it varies by 30x across a mail bucket. `max_archive_objects` is what keeps a
+single archive inside `time_reserve_ms`; at the ~10 objects/s a run sustains,
+the 3,000 default is about 290 s.
 
 A photo bucket needs no code change, only its own config:
 
