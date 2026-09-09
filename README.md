@@ -27,9 +27,9 @@ overhead. Packed into ~250 MiB tars, the overhead disappears.
 2. **Select.** List a source prefix in key order, take objects matching
    `suffix_pattern` until either `min_archive_mib` or `max_archive_objects` is
    reached, skipping anything newer than `min_age_seconds`.
-3. **Bundle.** Stream each object and its `<key><sidecar_suffix>` sidecar into a
-   tar via multipart upload, so memory stays at roughly one part regardless of
-   size. The manifest goes in as the final member.
+3. **Bundle.** Fetch each object and its `<key><sidecar_suffix>` sidecar with
+   `fetch_workers` GETs in flight, and write them into a tar via multipart
+   upload in listing order. The manifest goes in as the final member.
 4. **Index.** Write the same manifest beside the tar in STANDARD.
 5. **Delete.** Remove the sources and their sidecars.
 
@@ -58,6 +58,7 @@ max_archive_objects = 3000        # whichever limit a prefix reaches first
 min_age_seconds     = 3600        # never race the process still writing
 part_size_mib       = 16
 time_reserve_ms     = 300_000     # stop starting archives near the Lambda timeout
+fetch_workers       = 16          # object + sidecar GETs in flight; 1 is serial
 ```
 
 A run's time goes on per-object round trips, not on bytes: 3,900 objects took

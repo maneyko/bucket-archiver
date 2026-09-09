@@ -6,9 +6,10 @@ locals {
 
     architectures = ["arm64"]
 
-    # Peak memory is roughly part_size plus one source object; the larger
-    # allocation is for the proportionally larger network throughput.
-    memory_size  = 1024 # MiB
+    # Peak memory is roughly part_size, plus the prefetch window, plus one
+    # source object; the rest of the allocation buys network and CPU for the
+    # fetch_workers threads.
+    memory_size  = 2048 # MiB
     storage_size = 512  # MiB
   }
 }

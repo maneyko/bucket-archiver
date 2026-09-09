@@ -2,6 +2,7 @@ import io
 import platform
 
 import boto3
+from botocore.config import Config
 
 
 def human_bytes(num: float) -> str:
@@ -19,7 +20,15 @@ class S3:
         aws_opts = {}
         if platform.uname().system == "Darwin":
             aws_opts["profile_name"] = "personal"
-        self.client = boto3.Session(**aws_opts).client("s3")
+        self.client = boto3.Session(**aws_opts).client(
+            "s3",
+            # The default pool of 10 would serialise the prefetch threads.
+            config=Config(max_pool_connections=64, retries={"mode": "standard", "max_attempts": 5}),
+        )
+        # botocore builds its exception classes on first touch. Two threads
+        # racing that build get NoSuchKey objects that are not each other, and a
+        # missing sidecar then escapes get_body_or_none and kills the archive.
+        self.no_such_key = self.client.exceptions.NoSuchKey
 
     def list_objects(self, prefix: str):
         paginator = self.client.get_paginator("list_objects_v2")
@@ -37,19 +46,10 @@ class S3:
     def get_body(self, key: str) -> bytes:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
 
-    def get_stream(self, key: str):
-        """The object's body as a readable stream, plus its length; the caller closes it.
-
-        The length comes from the response rather than a prior listing so it always
-        describes the bytes actually being read.
-        """
-        response = self.client.get_object(Bucket=self.bucket, Key=key)
-        return response["Body"], response["ContentLength"]
-
     def get_body_or_none(self, key: str) -> bytes | None:
         try:
             return self.get_body(key)
-        except self.client.exceptions.NoSuchKey:
+        except self.no_such_key:
             return None
 
     def put(self, key: str, body: bytes, **kwargs):

@@ -22,3 +22,7 @@ max_archive_objects = 3000
 min_age_seconds     = 3600
 part_size_mib       = 16
 time_reserve_ms     = 300_000
+
+# Object and sidecar GETs to keep in flight ahead of the tar writer. 1 restores
+# the serial behaviour, and with it a peak memory of one part plus one object.
+fetch_workers       = 16
