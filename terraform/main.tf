@@ -6,9 +6,12 @@ locals {
 
     architectures = ["arm64"]
 
-    # Peak memory is roughly part_size, plus the prefetch window, plus one
-    # source object; the rest of the allocation buys network and CPU for the
-    # fetch_workers threads.
+    # Not reducible to 1024: the manifest dominates, not the buffers. Every
+    # member's parsed sidecar is held until the tar closes, so peak scales with
+    # max_archive_objects and again with archives per invocation. A mail run
+    # measured 980 MB, which is 96% of 1024, and that was at a 9,000 cap.
+    # The rest also buys vCPU, which the fetch_workers threads need because
+    # botocore parsing is what they contend on.
     memory_size  = 2048 # MiB
     storage_size = 512  # MiB
   }

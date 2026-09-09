@@ -47,7 +47,10 @@ bucket.
    one. Three settings, one constraint; changing any of them alone breaks it.
 6. **Peak memory must not depend on the largest object.** Objects above
    `PREFETCH_MIB` are streamed rather than prefetched for this reason. Anything
-   that buffers a whole object puts a size ceiling on the bucket.
+   that buffers a whole object puts a size ceiling on the bucket. What it does
+   depend on is `max_archive_objects`: every member's parsed sidecar is held in
+   `members` until the tar closes, so the manifest, not the buffers, is what
+   sets the floor under `memory_size`.
 
 ## Sharp edges, all of which have already caused a bug
 
@@ -94,6 +97,15 @@ copies on write, so wrapping a body to hand to `tarfile` costs 1x the object,
 not 2x. Getting this wrong moves the predicted memory ceiling by a factor of
 two — the measured boundary was a 1,356 MiB member archiving fine while an
 1,856 MiB one died at 2047 MB of 2048.
+
+**Measure memory on a bucket with sidecars, not one without.** The photo bucket
+peaks around 320 MB because it has no sidecars and few members per tar; the mail
+bucket peaked at 980 MB doing the same work, because `members` holds a parsed
+sidecar per object and it is not freed until the tar closes. Peak also climbs
+with archives per invocation rather than resetting between them — 47 small
+archives cost more than one large one — so the allocator is not returning those
+buffers. Generalising from the photo numbers is how `memory_size` nearly got cut
+to 1024, where the mail figure is 96%.
 
 **Deep Archive objects cannot be copied or renamed.** `CopyObject` fails with
 `InvalidObjectState` until restored (12–48 h). Get the naming right before
