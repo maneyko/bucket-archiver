@@ -16,8 +16,13 @@ delete_sources = true
 # An archive is cut once either limit is reached. A run spends its time on
 # per-object round trips rather than on bytes, so only the count bounds how long
 # one archive takes, and time_reserve_ms has to cover that.
+#
+# 10,000 objects is ~110 s at the ~92 objects/s that fetch_workers = 16
+# sustains, well inside the 300 s reserve. It is ~950 s at the ~10 objects/s a
+# serial run sustains, which overruns the reserve and the Lambda timeout both:
+# lower this if fetch_workers is ever set back to 1.
 min_archive_mib     = 250
-max_archive_objects = 3000
+max_archive_objects = 10_000
 
 min_age_seconds     = 3600
 part_size_mib       = 16

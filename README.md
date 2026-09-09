@@ -56,7 +56,7 @@ archive_storage_class  = "DEEP_ARCHIVE"
 manifest_storage_class = "STANDARD"
 
 min_archive_mib     = 250
-max_archive_objects = 3000        # whichever limit a prefix reaches first
+max_archive_objects = 10_000      # whichever limit a prefix reaches first
 min_age_seconds     = 3600        # never race the process still writing
 part_size_mib       = 16
 time_reserve_ms     = 300_000     # stop starting archives near the Lambda timeout
@@ -67,8 +67,13 @@ A run's time goes on per-object round trips, not on bytes: 3,900 objects took
 291 s at 250 MiB and 3,713 took 328 s at 102 MiB. So `min_archive_mib` alone
 does not bound how long one archive takes — mean object size decides that, and
 it varies by 30x across a mail bucket. `max_archive_objects` is what keeps a
-single archive inside `time_reserve_ms`; at the ~10 objects/s a run sustains,
-the 3,000 default is about 290 s.
+single archive inside `time_reserve_ms`.
+
+That pair is only self-consistent for a given `fetch_workers`. At the default
+16, a mail bucket sustains ~92–100 objects/s, so the 10,000 default is ~110 s
+against a 300 s reserve. Serially it sustains ~10 objects/s, where 10,000
+objects is ~950 s — past the reserve and past the Lambda timeout. Setting
+`fetch_workers = 1` means lowering `max_archive_objects` with it.
 
 ### How large a single object can be
 

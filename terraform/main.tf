@@ -117,6 +117,19 @@ resource "aws_lambda_function" "this" {
   }
 }
 
+# The EventBridge target below sets its own retry policy, but a hand-rolled
+# "aws lambda invoke --invocation-type Event" is governed by this instead, and
+# its default is two retries. A failed run must never be retried: the retry
+# races nothing, but it re-runs an archive that already lost 15 minutes, and a
+# queue of them takes an hour to burn down. Same reasoning as the target's
+# retry_policy, expressed where a direct async invoke will see it.
+resource "aws_lambda_function_event_invoke_config" "this" {
+  function_name = aws_lambda_function.this.function_name
+
+  maximum_retry_attempts       = 0
+  maximum_event_age_in_seconds = 3600
+}
+
 locals {
   # One rule per (bucket, schedule) pair. A bucket with an empty list gets no
   # rules at all, which is how archiving is turned off for it.

@@ -42,7 +42,9 @@ bucket.
    an archive whenever more than the reserve remains, so the reserve — not the
    15-minute timeout — is the deadline one archive has to meet. Every limit that
    bounds an archive (`max_archive_objects`, `min_archive_mib`) has to be chosen
-   against it.
+   against it, and `max_archive_objects` only converts to seconds through
+   `fetch_workers`: the 10,000 default is ~110 s at 16 workers and ~950 s at
+   one. Three settings, one constraint; changing any of them alone breaks it.
 6. **Peak memory must not depend on the largest object.** Objects above
    `PREFETCH_MIB` are streamed rather than prefetched for this reason. Anything
    that buffers a whole object puts a size ceiling on the bucket.
