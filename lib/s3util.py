@@ -46,6 +46,15 @@ class S3:
     def get_body(self, key: str) -> bytes:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
 
+    def get_stream(self, key: str):
+        """The object's body as a readable stream, plus its length; the caller closes it.
+
+        The length comes from the response rather than a prior listing so it always
+        describes the bytes actually being read.
+        """
+        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        return response["Body"], response["ContentLength"]
+
     def get_body_or_none(self, key: str) -> bytes | None:
         try:
             return self.get_body(key)

@@ -11,7 +11,8 @@ from lib.s3util import MultipartUploadStream
 # How much fetched-but-not-yet-written object data may sit in memory. Object
 # sizes in one bucket span four orders of magnitude -- the sixteen largest in
 # the mail archive total 967 MiB -- so a lookahead bounded only by object count
-# would not fit in the Lambda.
+# would not fit in the Lambda. An object bigger than this is not prefetched at
+# all; it is streamed, so no single object can decide whether a run fits.
 PREFETCH_MIB = 64
 
 
@@ -74,23 +75,29 @@ class TarBuilder:
                   + [member["sidecar_key"] for member in members if member["sidecar_key"]],
         }
 
+    def streams(self, obj: dict) -> bool:
+        """Whether this object goes straight to the tar instead of through the window."""
+        return obj["Size"] > PREFETCH_MIB*1024**2
+
     def fetched(self, objects: list[dict], pool: ThreadPoolExecutor):
         """Yield (obj, body, sidecar) in ``objects`` order, fetching ahead of the writer.
 
         The tar writer is sequential and the members must keep the order the
         manifest records, but the two GETs each member costs are independent, and
         a run's time is almost entirely those round trips.
+
+        ``body`` is None for a streamed object: it costs the window nothing, so a
+        prefix of multi-gigabyte videos moves through one body at a time while
+        their sidecars still overlap.
         """
-        budget = PREFETCH_MIB*1024**2
         queue = deque()
         in_flight = 0
         index = 0
 
         while index < len(objects) or queue:
             while index < len(objects) and len(queue) < self.settings.fetch_workers:
-                size = objects[index]["Size"]
-                # Always keep one in flight, or an object over the budget stalls.
-                if queue and in_flight + size > budget:
+                size = 0 if self.streams(objects[index]) else objects[index]["Size"]
+                if in_flight + size > PREFETCH_MIB*1024**2:
                     break
                 queue.append((size, pool.submit(self.fetch, objects[index])))
                 in_flight += size
@@ -99,14 +106,23 @@ class TarBuilder:
             in_flight -= size
             yield future.result()
 
-    def fetch(self, obj: dict) -> tuple[dict, bytes, bytes | None]:
+    def fetch(self, obj: dict) -> tuple[dict, bytes | None, bytes | None]:
         key = obj["Key"]
-        return obj, self.s3.get_body(key), self.s3.get_body_or_none(key + self.settings.sidecar_suffix)
+        body = None if self.streams(obj) else self.s3.get_body(key)
+        return obj, body, self.s3.get_body_or_none(key + self.settings.sidecar_suffix)
 
-    def add_member(self, tar: tarfile.TarFile, obj: dict, body: bytes, sidecar: bytes | None) -> dict:
+    def add_member(self, tar: tarfile.TarFile, obj: dict, body: bytes | None, sidecar: bytes | None) -> dict:
         key = obj["Key"]
         mtime = int(obj["LastModified"].timestamp())
-        name = self.add_file(tar, key.removeprefix(self.source_prefix), body, mtime)
+        name_in_tar = key.removeprefix(self.source_prefix)
+
+        if body is None:
+            fileobj, size = self.s3.get_stream(key)
+            with fileobj:
+                name = self.add_stream(tar, name_in_tar, fileobj, size, mtime)
+        else:
+            size = len(body)
+            name = self.add_file(tar, name_in_tar, body, mtime)
 
         sidecar_key = key + self.settings.sidecar_suffix
         if sidecar is not None:
@@ -115,7 +131,7 @@ class TarBuilder:
         return {
             "key": key,
             "name": name,
-            "size": len(body),
+            "size": size,
             "etag": obj.get("ETag", "").strip('"'),
             "last_modified": obj["LastModified"].isoformat(),
             "sidecar_key": sidecar_key if sidecar is not None else None,
@@ -123,13 +139,17 @@ class TarBuilder:
         }
 
     def add_file(self, tar: tarfile.TarFile, name: str, data: bytes, mtime: int) -> str:
+        return self.add_stream(tar, name, io.BytesIO(data), len(data), mtime)
+
+    def add_stream(self, tar: tarfile.TarFile, name: str, fileobj, size: int, mtime: int) -> str:
+        """Copy ``size`` bytes from ``fileobj`` into the tar without holding them."""
         info = tarfile.TarInfo(name=name)
-        info.size = len(data)
+        info.size = size
         info.mtime = mtime
         info.mode = 0o644
         info.uid = info.gid = 0
         info.uname = info.gname = ""
-        tar.addfile(info, io.BytesIO(data))
+        tar.addfile(info, fileobj)
         return info.name
 
     def parse_sidecar(self, key: str, sidecar: bytes | None):

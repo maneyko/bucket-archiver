@@ -23,6 +23,7 @@ min_age_seconds     = 3600
 part_size_mib       = 16
 time_reserve_ms     = 300_000
 
-# Object and sidecar GETs to keep in flight ahead of the tar writer. 1 restores
-# the serial behaviour, and with it a peak memory of one part plus one object.
+# Object and sidecar GETs to keep in flight ahead of the tar writer; 1 restores
+# the serial behaviour. Peak memory is one part plus the prefetch window,
+# whatever this is set to, because oversized objects bypass the window.
 fetch_workers       = 16

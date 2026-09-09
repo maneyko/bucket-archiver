@@ -29,7 +29,9 @@ overhead. Packed into ~250 MiB tars, the overhead disappears.
    reached, skipping anything newer than `min_age_seconds`.
 3. **Bundle.** Fetch each object and its `<key><sidecar_suffix>` sidecar with
    `fetch_workers` GETs in flight, and write them into a tar via multipart
-   upload in listing order. The manifest goes in as the final member.
+   upload in listing order. Objects too large to hold in memory are streamed
+   instead of prefetched, so peak memory never depends on how big one object
+   is. The manifest goes in as the final member.
 4. **Index.** Write the same manifest beside the tar in STANDARD.
 5. **Delete.** Remove the sources and their sidecars.
 
