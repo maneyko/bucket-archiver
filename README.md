@@ -70,6 +70,33 @@ it varies by 30x across a mail bucket. `max_archive_objects` is what keeps a
 single archive inside `time_reserve_ms`; at the ~10 objects/s a run sustains,
 the 3,000 default is about 290 s.
 
+### How large a single object can be
+
+`time_reserve_ms`, not the 15-minute Lambda timeout, is what bounds one object.
+The loop starts an archive whenever more than `time_reserve_ms` remains, so in
+the worst case an archive begins with barely that much left and has to finish
+inside it.
+
+Measured on a bucket of video: 36.7 MB/s at worst and ~50 MB/s typically for
+objects over 500 MiB, from GET through tar to completed multipart upload. An
+archive can also carry up to `min_archive_mib` of other objects before the big
+one crosses the threshold, and that comes off the same budget:
+
+    max object ~= time_reserve_ms x throughput - min_archive_mib
+
+At the 300_000 default that is **about 10 GiB at worst-case throughput**, so
+8 GiB is safe and 10 GiB is the edge. A 3.79 GiB video took 79.8 s, a quarter
+of the budget.
+
+Raising `time_reserve_ms` to 850_000 buys ~30 GiB, because one archive per
+invocation then gets the whole window — at the cost of roughly 3x on
+small-object throughput, so it suits one oversized file rather than a default.
+
+Neither memory nor S3 is the limit before then. Objects over the prefetch
+window are streamed, so peak memory does not move with object size (321 MB
+observed across a run whose largest member was 3.79 GiB), and the 10,000-part
+multipart cap at `part_size_mib = 16` is 156 GiB.
+
 A photo bucket needs no code change, only its own config:
 
 ```toml
@@ -135,6 +162,12 @@ retries, producing a second concurrent invocation that races the first.
 Each run archives what it can in the time available and stops with
 `time_reserve_ms` to spare; it is resumable by design, so a large backlog just
 takes several invocations. Loop until it reports `"archives": []`.
+
+Drain a backlog with a serial loop of the call above, not by queueing
+`--invocation-type Event` invocations. Asynchronous invocation retries a failed
+run twice by default, so one bad archive becomes three, and it discards events
+older than six hours; neither is visible in the summary the CLI prints. A
+synchronous loop has no retry, no age limit, and hands back each summary.
 
 ```bash
 ./bin/deploy.sh          # build, upload to S3, update the function
