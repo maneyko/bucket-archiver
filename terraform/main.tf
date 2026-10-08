@@ -67,8 +67,12 @@ resource "aws_iam_role_policy" "this" {
         Sid    = "WriteArchivesOnly"
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
-        # "bucket-archive/me@example.com/INBOX/email/archive-000001.tar"
-        Resource = [for arn in var.archive_bucket_arns : "${arn}/bucket-archive/*/archive-*"]
+        # "bucket-archive/me@example.com/INBOX/email/archive-000001.tar", or with an
+        # empty prefix_pattern, "bucket-archive/archive-000001.tar"
+        Resource = flatten([for arn in var.archive_bucket_arns : [
+          "${arn}/bucket-archive/*/archive-*",
+          "${arn}/bucket-archive/archive-*",
+        ]])
       },
       {
         Sid      = "DeleteSources"

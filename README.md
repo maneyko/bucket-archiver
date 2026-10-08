@@ -113,6 +113,17 @@ sidecar_suffix = '.json'
 Objects that do not match `suffix_pattern` are ignored entirely — which is how a
 `state.json` can sit inside a source prefix and never be bundled or deleted.
 
+An empty `prefix_pattern` makes the whole bucket one source prefix, so files
+spread over many small folders still fill 250 MiB tars, written to
+`bucket-archive/archive-NNNNNN.tar` with each member under its full key. The
+listing then includes `bucket-archive/` itself, so `suffix_pattern` is all that
+keeps the archiver's own output out; anchor it to the source layout:
+
+```toml
+prefix_pattern = []
+suffix_pattern = '^\d{4}/\d{2}/attachments/[0-9a-f]{64}\.[^/.]+$'
+```
+
 ## What it produces
 
 ```
