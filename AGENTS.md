@@ -54,9 +54,8 @@ bucket.
 
 **IAM resources are scoped by suffix, not by path.** `*/email/*` broke silently
 the moment the layout changed. The Lambda's write scope matches
-`bucket-archive/*/archive-*` and, for an empty `prefix_pattern`,
-`bucket-archive/archive-*`; neither can accidentally match a `state.json` or the
-config. Failures here are silent: deletes come back in `delete_errors`, not
+`bucket-archive/*/archive-*`, which cannot accidentally match a `state.json` or
+the config. Failures here are silent: deletes come back in `delete_errors`, not
 as an exception.
 
 **A role that cannot delete turns the run loop into an infinite one.** Because

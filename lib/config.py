@@ -17,7 +17,7 @@ def load_settings(s3) -> SimpleNamespace:
     settings = default_settings | tomllib.loads(s3.get_body(CONFIG_KEY).decode())
     bad_settings = [
         key for key in required_settings
-        if not (v := settings.get(key)) and not isinstance(v, (int, float, list))
+        if not (v := settings.get(key)) and not isinstance(v, (int, float))
     ]
     if bad_settings:
         raise TypeError(f"All settings must be populated. Found empty: {bad_settings}")
