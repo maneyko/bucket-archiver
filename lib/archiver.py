@@ -49,6 +49,8 @@ class Archiver:
     def archive_once(self, source_prefix: str) -> dict | None:
         """Build one tar for this prefix, or return None if there is not enough data."""
         objects = self.select_objects(source_prefix)
+        if not objects:
+            return None
         pending_bytes = sum(obj["Size"] for obj in objects)
         limit_bytes = self.settings.min_archive_mib*1024**2
 
