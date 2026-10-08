@@ -175,17 +175,17 @@ older than six hours; neither is visible in the summary the CLI prints. A
 synchronous loop has no retry, no age limit, and hands back each summary.
 
 ```bash
-./bin/deploy.sh          # build, upload to S3, update the function
-./bin/deploy.sh --build  # build only
+./bin/deploy.sh my-lambdas  # build, upload to s3://my-lambdas, update the function
+./bin/deploy.sh --build     # build only
 ```
 
-`bin/deploy.sh` carries my values at the top and nothing reads them from the
-environment — set these three before using it anywhere else:
+The artifact bucket is the one argument, and it must be the module's
+`artifact_bucket`. It has no default, so a deploy cannot upload to a bucket
+nobody named. Two more values are set at the top of the script:
 
 | Variable | Currently | Is |
 |---|---|---|
 | `AWS_PROFILE` | `personal` | the profile the upload and update run as |
-| `BUCKET` | `my-lambdas` | the artifact bucket, matching the module's `artifact_bucket` |
 | `lambda_name` | `bucket-archiver` | must match the module's `function_name` |
 
 The last one is worth repeating because nothing enforces it: a mismatch means

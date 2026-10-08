@@ -8,7 +8,15 @@ export AWS_PROFILE="personal"
 
 lambda_name="bucket-archiver"
 
-BUCKET="my-lambdas"
+if [[ $1 =~ ^(-b|--build)$ ]]; then
+  build_only=true
+elif [[ -n $1 ]]; then
+  BUCKET=$1
+else
+  echo "usage: $0 <artifact-bucket> | --build" >&2
+  exit 2
+fi
+
 KEY="$lambda_name/function.zip"
 ZIP="dist/$lambda_name.zip"
 
@@ -36,7 +44,7 @@ rm -f "$__DIR__/$ZIP"
 zip -r "$__DIR__/$ZIP" .
 cd "$OLDPWD" && rm -fr "$d"
 
-if [[ $1 =~ ^(-b|--build)$ ]]; then
+if [[ $build_only == true ]]; then
   echo "built only (--build); not uploading"
   exit 0
 fi

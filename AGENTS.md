@@ -160,7 +160,7 @@ worked:
 ## Deploying
 
 ```bash
-./bin/deploy.sh     # builds the zip, uploads it, updates the Lambda
+./bin/deploy.sh my-lambdas  # builds the zip, uploads it to that bucket, updates the Lambda
 ```
 
 The Terraform module in `terraform/` pins the package by key (and optionally
